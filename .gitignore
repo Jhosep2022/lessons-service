@@ -1,0 +1,14 @@
+node_modules/
+dist/
+build/
+coverage/
+*.log
+/.serverless/
+.webpack/
+.env
+.env.local
+.env.*.local
+!.env.example
+.vscode/
+/serverless.yml
+package-lock.json
