@@ -1,0 +1,81 @@
+name: Deploy lessons-setProgress Lambda (direct)
+
+on:
+  push:
+    branches: [main, qa]
+
+jobs:
+  deploy:
+    name: Deploy lessons setProgress
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref == 'refs/heads/main' && 'dev' || 'qa' }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with: { node-version: '20' }
+
+      - name: 📦 Install deps (subdir)
+        if: ${{ hashFiles('lessons-service/package.json') != '' }}
+        working-directory: lessons-service
+        run: |
+          if [ -f package-lock.json ]; then npm ci --omit=dev; else npm i --omit=dev; fi
+      - name: 📦 Install deps (root)
+        if: ${{ hashFiles('lessons-service/package.json') == '' && hashFiles('package.json') != '' }}
+        run: |
+          if [ -f package-lock.json ]; then npm ci --omit=dev; else npm i --omit=dev; fi
+
+      - name: 📦 Package (subdir)
+        if: ${{ hashFiles('lessons-service/package.json') != '' }}
+        working-directory: lessons-service
+        run: zip -r lessons-setProgress.zip src/ node_modules/ package.json package-lock.json || true
+      - name: 📦 Package (root)
+        if: ${{ hashFiles('lessons-service/package.json') == '' && hashFiles('package.json') != '' }}
+        run: zip -r lessons-setProgress.zip src/ node_modules/ package.json package-lock.json || true
+
+      - uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: 🔎 Resolve ENV (courses table)
+        id: envs
+        shell: bash
+        run: |
+          set -euo pipefail
+          STAGE=${{ github.ref == 'refs/heads/main' && 'dev' || 'qa' }}
+          TABLE=$(aws ssm get-parameter --name "/novalearn/${STAGE}/COURSES_TABLE_NAME" \
+                    --query "Parameter.Value" --output text 2>/dev/null || echo "None")
+          if [ "$TABLE" = "None" ]; then
+            TABLE=$(aws cloudformation list-exports \
+              --query "Exports[?Name=='courses-service-${STAGE}-CoursesTableName'].Value | [0]" \
+              --output text 2>/dev/null || echo "None")
+          fi
+          [ "$TABLE" = "None" ] && TABLE="novalearn-courses-${STAGE}"
+          echo "STAGE=$STAGE" >> $GITHUB_OUTPUT
+          echo "TABLE=$TABLE" >> $GITHUB_OUTPUT
+
+      - name: 🚀 Deploy (subdir)
+        if: ${{ hashFiles('lessons-service/package.json') != '' }}
+        working-directory: lessons-service
+        run: |
+          STAGE="${{ steps.envs.outputs.STAGE }}"; TABLE="${{ steps.envs.outputs.TABLE }}"
+          aws lambda update-function-configuration \
+            --function-name lessons-service-$STAGE-setProgress \
+            --environment "Variables={STAGE=\"$STAGE\",COURSES_TABLE_NAME=\"$TABLE\",ALLOWED_ORIGINS=\"*\"}"
+          aws lambda update-function-code \
+            --function-name lessons-service-$STAGE-setProgress \
+            --zip-file fileb://lessons-setProgress.zip \
+            --publish
+      - name: 🚀 Deploy (root)
+        if: ${{ hashFiles('lessons-service/package.json') == '' && hashFiles('package.json') != '' }}
+        run: |
+          STAGE="${{ steps.envs.outputs.STAGE }}"; TABLE="${{ steps.envs.outputs.TABLE }}"
+          aws lambda update-function-configuration \
+            --function-name lessons-service-$STAGE-setProgress \
+            --environment "Variables={STAGE=\"$STAGE\",COURSES_TABLE_NAME=\"$TABLE\",ALLOWED_ORIGINS=\"*\"}"
+          aws lambda update-function-code \
+            --function-name lessons-service-$STAGE-setProgress \
+            --zip-file fileb://lessons-setProgress.zip \
+            --publish
