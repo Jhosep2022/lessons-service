@@ -58,6 +58,7 @@ jobs:
                 LESSONS_TABLE_NAME=${{secrets.LESSONS_TABLE_NAME}},
                 ALLOWED_ORIGINS=${{secrets.ALLOWED_ORIGINS}}
               }"
+          aws lambda wait function-updated --function-name "lessons-service-$STAGE-get"
           aws lambda update-function-code \
             --function-name lessons-service-$STAGE-get \
             --zip-file fileb://lessons-get.zip \
@@ -65,6 +66,7 @@ jobs:
       - name: 🚀 Deploy (root)
         if: ${{ hashFiles('lessons-service/package.json') == '' && hashFiles('package.json') != '' }}
         run: |
+          NAME="lessons-service-$STAGE-get"
           aws lambda update-function-configuration \
             --function-name lessons-service-$STAGE-get \
             --environment "Variables={
