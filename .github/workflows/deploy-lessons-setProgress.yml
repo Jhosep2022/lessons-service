@@ -63,7 +63,12 @@ jobs:
           STAGE="${{ steps.envs.outputs.STAGE }}"; TABLE="${{ steps.envs.outputs.TABLE }}"
           aws lambda update-function-configuration \
             --function-name lessons-service-$STAGE-setProgress \
-            --environment "Variables={STAGE=\"$STAGE\",COURSES_TABLE_NAME=\"$TABLE\",ALLOWED_ORIGINS=\"*\"}"
+            --environment "Variables={
+                STAGE=${{env.STAGE}},
+                COURSES_TABLE_NAME=${{secrets.COURSES_TABLE_NAME}},
+                LESSONS_TABLE_NAME=${{secrets.LESSONS_TABLE_NAME}},
+                ALLOWED_ORIGINS=${{secrets.ALLOWED_ORIGINS}}
+              }"
           aws lambda update-function-code \
             --function-name lessons-service-$STAGE-setProgress \
             --zip-file fileb://lessons-setProgress.zip \
@@ -74,7 +79,12 @@ jobs:
           STAGE="${{ steps.envs.outputs.STAGE }}"; TABLE="${{ steps.envs.outputs.TABLE }}"
           aws lambda update-function-configuration \
             --function-name lessons-service-$STAGE-setProgress \
-            --environment "Variables={STAGE=\"$STAGE\",COURSES_TABLE_NAME=\"$TABLE\",ALLOWED_ORIGINS=\"*\"}"
+            --environment "Variables={
+                STAGE=${{env.STAGE}},
+                COURSES_TABLE_NAME=${{secrets.COURSES_TABLE_NAME}},
+                LESSONS_TABLE_NAME=${{secrets.LESSONS_TABLE_NAME}},
+                ALLOWED_ORIGINS=${{secrets.ALLOWED_ORIGINS}}
+              }"
           aws lambda update-function-code \
             --function-name lessons-service-$STAGE-setProgress \
             --zip-file fileb://lessons-setProgress.zip \
