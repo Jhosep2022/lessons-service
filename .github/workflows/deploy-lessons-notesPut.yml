@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ github.ref == 'refs/heads/main' && 'dev' || 'qa' }}
 
+    env:
+      STAGE: ${{ github.ref == 'refs/heads/main' && 'dev' || 'qa' }}
+
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
