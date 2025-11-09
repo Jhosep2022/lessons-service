@@ -46,7 +46,6 @@ jobs:
         if: ${{ hashFiles('lessons-service/package.json') != '' }}
         working-directory: lessons-service
         run: |
-          STAGE="${{ steps.envs.outputs.STAGE }}"; TABLE="${{ steps.envs.outputs.TABLE }}"
           aws lambda update-function-configuration \
             --function-name lessons-service-$STAGE-notesPut \
             --environment "Variables={
@@ -62,7 +61,6 @@ jobs:
       - name: 🚀 Deploy (root)
         if: ${{ hashFiles('lessons-service/package.json') == '' && hashFiles('package.json') != '' }}
         run: |
-          STAGE="${{ steps.envs.outputs.STAGE }}"; TABLE="${{ steps.envs.outputs.TABLE }}"
           aws lambda update-function-configuration \
             --function-name lessons-service-$STAGE-notesPut \
             --environment "Variables={
