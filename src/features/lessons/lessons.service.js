@@ -56,6 +56,7 @@ export async function svcCourseProgress({ userId, courseId }) {
 
 /** PUT notas personales de la lección */
 export async function svcSetNotes({ userId, courseId, lessonId, body }) {
+  const s = (v) => (typeof v === 'string' ? v.trim() : '');
   if (!s(userId) || !s(courseId) || !s(lessonId)) throw new Error('BAD_INPUT');
   const content = s(body?.content || '');
   return await setLessonNotes({ userId, courseId, lessonId, content });
@@ -63,9 +64,9 @@ export async function svcSetNotes({ userId, courseId, lessonId, body }) {
 
 /** POST mensaje al chat contextual de la lección */
 export async function svcPostChat({ userId, courseId, lessonId, body }) {
+  const s = (v) => (typeof v === 'string' ? v.trim() : '');
   if (!s(userId) || !s(courseId) || !s(lessonId)) throw new Error('BAD_INPUT');
   const message = s(body?.message || '');
   if (!message) throw new Error('EMPTY_MESSAGE');
-
   return await appendLessonChatMessage({ userId, courseId, lessonId, message });
 }

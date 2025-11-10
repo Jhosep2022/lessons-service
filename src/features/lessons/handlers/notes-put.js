@@ -7,7 +7,7 @@ export const handler = async (event) => {
     if (!ctx.userId) return err(event, 'UNAUTHORIZED', 401);
     const { courseId, lessonId } = event.pathParameters || {};
     const body = (() => { try { return parse(event) || {}; } catch { return {}; } })();
-    const res = await svcSetNotes({ userId: ctx.userId, courseId, lessonId, content: body.content || '' });
+    const res = await svcSetNotes({ userId: ctx.userId, courseId, lessonId, body });
     return ok(event, res);
   } catch (e) {
     return err(event, e.message || 'ERROR', 400);

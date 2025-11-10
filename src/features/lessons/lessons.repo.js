@@ -14,20 +14,28 @@ const coursePK = (courseId) => `COURSE#${courseId}`;
 const lessonsTable = env.lessonsTableName;
 
 export async function getLesson(userId, courseId, lessonId) {
-  // 1) Contenido de la lección (catálogo)
-  const lr = await doc.send(new GetCommand({
+  // 1) Contenido de la lección (desde catálogo)
+  const qr = await doc.send(new QueryCommand({
     TableName: lessonsTable,
-    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :pref)',
-    ExpressionAttributeValues: {
-      ':pk': coursePK(courseId),
-      ':pref': `LESSON#${lessonId}#`
+    IndexName: 'GSI1',                            
+    KeyConditionExpression: '#gpk = :gpk',
+    FilterExpression: '#lid = :lid',              
+    ExpressionAttributeNames: {
+      '#gpk': 'GSI1PK',
+      '#lid': 'lessonId',
     },
-    ScanIndexForward: true
+    ExpressionAttributeValues: {
+      ':gpk': coursePK(courseId),                 
+      ':lid': lessonId,
+    },
+    ScanIndexForward: true,
+    Limit: 2,
   }));
 
-  const lesson = (lr.Items || []).find(i => String(i.lessonId) === String(lessonId));
+  const lesson = (qr.Items || [])[0];
   if (!lesson) return null;
 
+  // 2) Progreso + notas (tabla de courses)
   const pk = coursePK(courseId);
   const [p, n] = await Promise.all([
     doc.send(new GetCommand({
@@ -59,8 +67,8 @@ export async function getLesson(userId, courseId, lessonId) {
       score: p.Item?.score || null,
       lastViewedAt: p.Item?.lastViewedAt || null,
       completedAt: p.Item?.completedAt || null
-    } : {status: 'not_started', progressPercent: 0},
-    notes: n.Item.content || ''
+    } : { status: 'not_started', progressPercent: 0 },
+    notes: n.Item?.content || ''
   };
 }
 
@@ -77,7 +85,7 @@ export async function readCourseMeta(courseId) {
 export async function setLessonProgress({ userId, courseId, lessonId, nextStatus, progressPercent, score }) {
   const pk = coursePK(courseId);
 
-  const [ enroll, meta ] = await Promise.all([
+  const [ prevProg, meta ] = await Promise.all([
     doc.send(new GetCommand({
       TableName: env.tableName,
       Key: { PK: pk, SK: `PROGRESS#LESSON#${lessonId}` }
@@ -86,19 +94,18 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
   ]);
 
   if (!meta) throw new Error('COURSE_NOT_FOUND');
-  const prevStatus = prevProg.Item?.status || 'not_started';
 
+  const previousStatus = prevProg.Item?.status || 'not_started';
   let delta = 0;
-  if (prevStatus !== 'completed' && nextStatus === 'completed') delta = +1;
-  if (prevStatus === 'completed' && nextStatus !== 'completed') delta = -1;
+  if (previousStatus !== 'completed' && nextStatus === 'completed') delta = +1;
+  if (previousStatus === 'completed' && nextStatus !== 'completed') delta = -1;
 
   const now = new Date().toISOString();
-  const newCompleted = Math.max(0, (enroll.completedLessons || 0) + delta);
-  const total = meta.totalLessons || 0;
+  const currentCompleted = Number(meta.completedLessons || 0);
+  const newCompleted = Math.max(0, currentCompleted + delta);
+  const total = Number(meta.totalLessons || 0);
 
-  const pct = total > 0
-    ? Math.round((newCompleted / total) * 10000) / 100
-    : 0;
+  const pct = total > 0 ? Math.round((newCompleted / total) * 10000) / 100 : 0;
   const newCourseStatus = pct === 100 ? 'completed' : 'active';
 
   await doc.send(new TransactWriteCommand({
@@ -112,7 +119,7 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
             etype: 'PROGRESS',
             lessonId,
             status: nextStatus,
-            progressPercent: progressPercent !== undefined
+            progressPercent: (progressPercent !== undefined)
               ? Number(progressPercent)
               : (prevProg.Item?.progressPercent ?? 0),
             score,
@@ -151,14 +158,9 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
     }
   }));
 
-  return {
-    completedLessons: newCompleted,
-    totalLessons: total,
-    progressPercent: pct,
-    status: newCourseStatus,
-    updatedAt: now
-  };
+  return { completedLessons: newCompleted, totalLessons: total, progressPercent: pct, status: newCourseStatus, updatedAt: now };
 }
+
 
 export async function setLessonNotes({ userId, courseId, lessonId, content }) {
   const pk = coursePK(courseId);
