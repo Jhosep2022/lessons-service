@@ -1,4 +1,18 @@
 import { corsHeaders } from './cors.js';
-export const parse = (e) => (e?.body ? (typeof e.body === 'string' ? JSON.parse(e.body) : e.body) : {});
-export const ok = (e, body, status=200) => ({ statusCode: status, headers: { 'Content-Type':'application/json', ...corsHeaders(e) }, body: JSON.stringify(body) });
-export const err = (e, msg, status=400) => ok(e, { error: msg }, status);
+
+export function parse(event) {
+  if (!event || !event.body) return {};
+  return typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
+}
+
+export function ok(event, body, statusCode = 200, extra = {}) {
+  return {
+    statusCode,
+    headers: { 'Content-Type': 'application/json', ...corsHeaders(event), ...(extra.headers || {}) },
+    body: JSON.stringify(body)
+  };
+}
+
+export function err(event, message, status = 400, extra = {}) {
+  return ok(event, { error: message }, status, extra);
+}
