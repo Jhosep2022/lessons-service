@@ -14,18 +14,17 @@ const coursePK = (courseId) => `COURSE#${courseId}`;
 const lessonsTable = env.lessonsTableName;
 
 export async function getLesson(userId, courseId, lessonId) {
-  // 1) Contenido de la lección (desde catálogo)
   const qr = await doc.send(new QueryCommand({
     TableName: lessonsTable,
-    IndexName: 'GSI1',                            
-    KeyConditionExpression: '#gpk = :gpk',
-    FilterExpression: '#lid = :lid',              
+    IndexName: 'byCourse',                 
+    KeyConditionExpression: '#gpk = :gpk', 
+    FilterExpression: '#lid = :lid',
     ExpressionAttributeNames: {
       '#gpk': 'GSI1PK',
       '#lid': 'lessonId',
     },
     ExpressionAttributeValues: {
-      ':gpk': coursePK(courseId),                 
+      ':gpk': `COURSE#${courseId}`,
       ':lid': lessonId,
     },
     ScanIndexForward: true,
@@ -35,8 +34,7 @@ export async function getLesson(userId, courseId, lessonId) {
   const lesson = (qr.Items || [])[0];
   if (!lesson) return null;
 
-  // 2) Progreso + notas (tabla de courses)
-  const pk = coursePK(courseId);
+  const pk = `COURSE#${courseId}`;
   const [p, n] = await Promise.all([
     doc.send(new GetCommand({
       TableName: env.tableName,
