@@ -14,27 +14,33 @@ const coursePK = (courseId) => `COURSE#${courseId}`;
 const lessonsTable = env.lessonsTableName;
 
 export async function getLesson(userId, courseId, lessonId) {
+  // 1) Buscar la lección por GSI "byCourse" + filtro por lessonId
   const qr = await doc.send(new QueryCommand({
-    TableName: lessonsTable,
+    TableName: env.lessonsTable,           
     IndexName: 'byCourse',                 
-    KeyConditionExpression: '#gpk = :gpk', 
+    KeyConditionExpression: '#gpk = :gpk AND begins_with(#gsk, :gsk)',
     FilterExpression: '#lid = :lid',
     ExpressionAttributeNames: {
       '#gpk': 'GSI1PK',
+      '#gsk': 'GSI1SK',
       '#lid': 'lessonId',
     },
     ExpressionAttributeValues: {
       ':gpk': `COURSE#${courseId}`,
+      ':gsk': 'M#',                       
       ':lid': lessonId,
     },
     ScanIndexForward: true,
-    Limit: 2,
+    Limit: 1,
   }));
 
-  const lesson = (qr.Items || [])[0];
-  if (!lesson) return null;
+  const item = qr.Items?.[0];
+  if (!item) return null;
 
+  // 2) Opcional: leer progreso y notas del usuario (tabla "principal" env.tableName)
+  //    PK = COURSE#<courseId>, SK = PROGRESS#LESSON#<lessonId> / NOTES#LESSON#<lessonId>
   const pk = `COURSE#${courseId}`;
+
   const [p, n] = await Promise.all([
     doc.send(new GetCommand({
       TableName: env.tableName,
@@ -43,30 +49,37 @@ export async function getLesson(userId, courseId, lessonId) {
     doc.send(new GetCommand({
       TableName: env.tableName,
       Key: { PK: pk, SK: `NOTES#LESSON#${lessonId}` }
-    }))
+    })),
   ]);
 
+  const progress = p.Item
+    ? {
+        status: p.Item.status,
+        progressPercent: p.Item.progressPercent ?? 0,
+        score: p.Item.score ?? null,
+        lastViewedAt: p.Item.lastViewedAt ?? null,
+        completedAt: p.Item.completedAt ?? null,
+      }
+    : { status: 'not_started', progressPercent: 0 };
+
+  const lesson = {
+    lessonId: item.lessonId,
+    moduleId: item.moduleId,
+    title: item.title,
+    durationMinutes: item.durationMinutes,
+    order: item.order,
+    contentMD: item.contentMD ?? '',
+    contentUrl: item.contentUrl ?? '',
+    summary: item.summary ?? '',
+    tips: Array.isArray(item.tips) ? item.tips : [],
+    // soporta ambos nombres por si en algún momento llegó "miniChallenges"
+    miniChallenge: item.miniChallenge ?? null,
+  };
+
   return {
-    lesson: {
-      lessonId: lesson.lessonId,
-      moduleId: lesson.moduleId,
-      title: lesson.title,
-      durationMinutes: lesson.durationMinutes,
-      order: lesson.order,
-      contentMD: lesson.contentMD || '',
-      contentUrl: lesson.contentUrl || '',
-      summary: lesson.summary || '',
-      tips: lesson.tips || [],
-      miniChallenges: lesson.miniChallenges || null,
-    },
-    progress: p.Item ? {
-      status: p.Item?.status,
-      progressPercent: p.Item?.progressPercent || 0,
-      score: p.Item?.score || null,
-      lastViewedAt: p.Item?.lastViewedAt || null,
-      completedAt: p.Item?.completedAt || null
-    } : { status: 'not_started', progressPercent: 0 },
-    notes: n.Item?.content || ''
+    lesson,
+    progress,
+    notes: n.Item?.content ?? '',
   };
 }
 
