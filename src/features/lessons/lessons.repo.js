@@ -16,7 +16,7 @@ const lessonsTable = env.lessonsTableName;
 export async function getLesson(userId, courseId, lessonId) {
   // 1) Buscar la lección por GSI "byCourse" + filtro por lessonId
   const qr = await doc.send(new QueryCommand({
-    TableName: env.lessonsTable,           
+    TableName: lessonsTable,           
     IndexName: 'byCourse',                 
     KeyConditionExpression: '#gpk = :gpk AND begins_with(#gsk, :gsk)',
     FilterExpression: '#lid = :lid',
@@ -43,11 +43,11 @@ export async function getLesson(userId, courseId, lessonId) {
 
   const [p, n] = await Promise.all([
     doc.send(new GetCommand({
-      TableName: env.tableName,
+      TableName: lessonsTable,
       Key: { PK: pk, SK: `PROGRESS#LESSON#${lessonId}` }
     })),
     doc.send(new GetCommand({
-      TableName: env.tableName,
+      TableName: lessonsTable,
       Key: { PK: pk, SK: `NOTES#LESSON#${lessonId}` }
     })),
   ]);
@@ -86,7 +86,7 @@ export async function getLesson(userId, courseId, lessonId) {
 /** Leer enrolment + meta del curso para calcular porcentaje */
 export async function readCourseMeta(courseId) {
   const r = await doc.send(new GetCommand({
-    TableName: env.tableName,
+    TableName: lessonsTable,
     Key: { PK: coursePK(courseId), SK: 'METADATA' }
   }));
   return r.Item || null;
@@ -98,7 +98,7 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
 
   const [ prevProg, meta ] = await Promise.all([
     doc.send(new GetCommand({
-      TableName: env.tableName,
+      TableName: lessonsTable,
       Key: { PK: pk, SK: `PROGRESS#LESSON#${lessonId}` }
     })),
     readCourseMeta(courseId)
@@ -123,7 +123,7 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
     TransactItems: [
       {
         Put: {
-          TableName: env.tableName,
+          TableName: lessonsTable,
           Item: {
             PK: pk,
             SK: `PROGRESS#LESSON#${lessonId}`,
@@ -141,7 +141,7 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
       },
       {
         Update: {
-          TableName: env.tableName,
+          TableName: lessonsTable,
           Key: { PK: pk, SK: 'METADATA' },
           UpdateExpression: 'SET completedLessons = :cl, progressPercent = :pp, updatedAt = :now, #st = :cs',
           ExpressionAttributeNames: { '#st': 'status' },
@@ -157,7 +157,7 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
   }));
 
   await doc.send(new PutCommand({
-    TableName: env.tableName,
+    TableName: lessonsTable,
     Item: {
       PK: `UA#${userId}`,
       SK: `ACT#${now}`,
@@ -178,7 +178,7 @@ export async function setLessonNotes({ userId, courseId, lessonId, content }) {
   const now = new Date().toISOString();
 
   await doc.send(new PutCommand({
-    TableName: env.tableName,
+    TableName: lessonsTable,
     Item: {
       PK: pk,
       SK: `NOTES#LESSON#${lessonId}`,
@@ -190,7 +190,7 @@ export async function setLessonNotes({ userId, courseId, lessonId, content }) {
 
   // (opcional) actividad
   await doc.send(new PutCommand({
-    TableName: env.tableName,
+    TableName: lessonsTable,
     Item: {
       PK: `UA#${userId}`,
       SK: `ACT#${now}`,
@@ -211,7 +211,7 @@ export async function appendLessonChatMessage({ userId, courseId, lessonId, mess
   const threadId = `t_${courseId}_${lessonId}`;
 
   await doc.send(new PutCommand({
-    TableName: env.tableName,
+    TableName: lessonsTable,
     Item: {
       PK: pk,
       SK: `CHAT#LESSON#${lessonId}#${now}`,
@@ -224,7 +224,7 @@ export async function appendLessonChatMessage({ userId, courseId, lessonId, mess
   }));
 
   await doc.send(new PutCommand({
-    TableName: env.tableName,
+    TableName: lessonsTable,
     Item: {
       PK: pk,
       SK: `CHAT#LESSON#${lessonId}#THREAD`,
