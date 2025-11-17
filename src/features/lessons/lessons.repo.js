@@ -31,14 +31,12 @@ export async function getLesson(userId, courseId, lessonId) {
       ':lid': lessonId,
     },
     ScanIndexForward: true,
-    Limit: 1,
+
   }));
 
   const item = qr.Items?.[0];
   if (!item) return null;
 
-  // 2) Opcional: leer progreso y notas del usuario (tabla "principal" env.tableName)
-  //    PK = COURSE#<courseId>, SK = PROGRESS#LESSON#<lessonId> / NOTES#LESSON#<lessonId>
   const pk = `COURSE#${courseId}`;
 
   const [p, n] = await Promise.all([
@@ -72,7 +70,6 @@ export async function getLesson(userId, courseId, lessonId) {
     contentUrl: item.contentUrl ?? '',
     summary: item.summary ?? '',
     tips: Array.isArray(item.tips) ? item.tips : [],
-    // soporta ambos nombres por si en algún momento llegó "miniChallenges"
     miniChallenge: item.miniChallenge ?? null,
   };
 
