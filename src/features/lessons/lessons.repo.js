@@ -101,20 +101,25 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
     readCourseMeta(courseId)
   ]);
 
-  if (!meta) throw new Error('COURSE_NOT_FOUND');
-
-  const previousStatus = prevProg.Item?.status || 'not_started';
+  // 🔹 Si no hay METADATA todavía, asumimos valores por defecto
+  const previousStatus = prevProg.Item?.status || "not_started";
   let delta = 0;
-  if (previousStatus !== 'completed' && nextStatus === 'completed') delta = +1;
-  if (previousStatus === 'completed' && nextStatus !== 'completed') delta = -1;
+  if (previousStatus !== "completed" && nextStatus === "completed") delta = +1;
+  if (previousStatus === "completed" && nextStatus !== "completed") delta = -1;
 
   const now = new Date().toISOString();
-  const currentCompleted = Number(meta.completedLessons || 0);
-  const newCompleted = Math.max(0, currentCompleted + delta);
-  const total = Number(meta.totalLessons || 0);
 
-  const pct = total > 0 ? Math.round((newCompleted / total) * 10000) / 100 : 0;
-  const newCourseStatus = pct === 100 ? 'completed' : 'active';
+  const currentCompleted = Number(meta?.completedLessons || 0);
+  // Fallback totalLessons = 1 si aún no existe meta (al menos esa lección)
+  const total = Number(meta?.totalLessons || 1);
+  const newCompleted = Math.max(0, currentCompleted + delta);
+
+  const pct =
+    total > 0
+      ? Math.round((newCompleted / total) * 10000) / 100
+      : 0;
+
+  const newCourseStatus = pct === 100 ? "completed" : "active";
 
   await doc.send(new TransactWriteCommand({
     TransactItems: [
@@ -124,33 +129,36 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
           Item: {
             PK: pk,
             SK: `PROGRESS#LESSON#${lessonId}`,
-            etype: 'PROGRESS',
+            etype: "PROGRESS",
             lessonId,
             status: nextStatus,
-            progressPercent: (progressPercent !== undefined)
-              ? Number(progressPercent)
-              : (prevProg.Item?.progressPercent ?? 0),
+            progressPercent:
+              progressPercent !== undefined
+                ? Number(progressPercent)
+                : prevProg.Item?.progressPercent ?? 0,
             score,
             lastViewedAt: now,
-            completedAt: nextStatus === 'completed' ? now : prevProg.Item?.completedAt
-          }
-        }
+            completedAt: nextStatus === "completed" ? now : prevProg.Item?.completedAt,
+          },
+        },
       },
       {
+        // ⚠️ Update en METADATA crea el item si no existía
         Update: {
           TableName: lessonsTable,
-          Key: { PK: pk, SK: 'METADATA' },
-          UpdateExpression: 'SET completedLessons = :cl, progressPercent = :pp, updatedAt = :now, #st = :cs',
-          ExpressionAttributeNames: { '#st': 'status' },
+          Key: { PK: pk, SK: "METADATA" },
+          UpdateExpression:
+            "SET completedLessons = :cl, progressPercent = :pp, updatedAt = :now, #st = :cs",
+          ExpressionAttributeNames: { "#st": "status" },
           ExpressionAttributeValues: {
-            ':cl': newCompleted,
-            ':pp': pct,
-            ':now': now,
-            ':cs': newCourseStatus
-          }
-        }
-      }
-    ]
+            ":cl": newCompleted,
+            ":pp": pct,
+            ":now": now,
+            ":cs": newCourseStatus,
+          },
+        },
+      },
+    ],
   }));
 
   await doc.send(new PutCommand({
@@ -158,16 +166,23 @@ export async function setLessonProgress({ userId, courseId, lessonId, nextStatus
     Item: {
       PK: `UA#${userId}`,
       SK: `ACT#${now}`,
-      etype: 'USER_ACTIVITY',
-      activityType: 'study',
+      etype: "USER_ACTIVITY",
+      activityType: "study",
       courseId,
       lessonId,
-      minutes: nextStatus === 'completed' ? 15 : 5
-    }
+      minutes: nextStatus === "completed" ? 15 : 5,
+    },
   }));
 
-  return { completedLessons: newCompleted, totalLessons: total, progressPercent: pct, status: newCourseStatus, updatedAt: now };
+  return {
+    completedLessons: newCompleted,
+    totalLessons: total,
+    progressPercent: pct,
+    status: newCourseStatus,
+    updatedAt: now,
+  };
 }
+
 
 
 export async function setLessonNotes({ userId, courseId, lessonId, content }) {
